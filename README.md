@@ -1,0 +1,2 @@
+# coingame
+Coin clicker game

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coin Clicker</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: purple;
+            color: white;
+            user-select: none; /* Disable text selection */
+        }
+        #counter {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        #coinButton {
+            cursor: pointer;
+            width: 80%;
+            max-width: 300px;
+            height: auto;
+            transition: transform 0.2s;
+            outline: none; /* Remove outline on click */
+            border: none; /* Remove border */
+            -webkit-tap-highlight-color: transparent; /* Remove blue rectangle on click for mobile devices */
+        }
+        #coinButton:active {
+            transform: scale(1.1);
+        }
+        #controls {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            margin-top: 20px;
+        }
+        #controls button {
+            font-size: 24px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            outline: none; /* Remove outline on click */
+            -webkit-tap-highlight-color: transparent; /* Remove blue rectangle on click for mobile devices */
+        }
+    </style>
+</head>
+<body>
+    <div id="counter">Coins: 0</div>
+    <img id="coinButton" src="https://i.postimg.cc/8CSnzB1T/Photo-1720905875371.png" alt="Click me!">
+    <div id="controls">
+        <button id="soundButton">🔊</button>
+        <button id="referralButton">👥</button>
+        <button id="leaderboardButton">🏆</button>
+        <button id="shopButton">🛒</button>
+    </div>
+
+    <script>
+        let tg = window.Telegram.WebApp;
+        let coins = 0;
+        let tapValue = 1;
+        let isMuted = false;
+        let currentUser = null;
+
+        function initApp() {
+            console.log('Initializing application...');
+
+            // Загрузка данных
+            loadData();
+
+            // Обновление счетчика
+            updateCounter();
+
+            // Добавление обработчиков событий
+            document.getElementById('coinButton').addEventListener('click', handleCoinClick);
+            document.getElementById('soundButton').addEventListener('click', toggleSound);
+            document.getElementById('referralButton').addEventListener('click', showReferralPopup);
+            document.getElementById('leaderboardButton').addEventListener('click', showLeaderboard);
+            document.getElementById('shopButton').addEventListener('click', showShop);
+
+            // Автоматическая авторизация
+            autoLogin();
+
+            // Настройка Telegram Web App
+            tg.ready();
+            tg.expand();
+        }
+
+        function autoLogin() {
+            if (tg.initDataUnsafe.user) {
+                currentUser = {
+                    id: tg.initDataUnsafe.user.id,
+                    username: tg.initDataUnsafe.user.username || `User${tg.initDataUnsafe.user.id}`
+                };
+                console.log('User logged in:', currentUser);
+            } else {
+                console.log('User data not available');
+            }
+        }
+
+        function handleCoinClick() {
+            coins += tapValue;
+            updateCounter();
+            saveData();
+            if (!isMuted) {
+                playSound();
+            }
+            tg.sendData(JSON.stringify({ action: 'click', count: coins }));
+        }
+
+        function playSound() {
+            const clickSound = new Audio('https://raw.githubusercontent.com/potcefist420/coingame/main/collectcoin-6075.mp3');
+            clickSound.play();
+        }
+
+        function updateCounter() {
+            document.getElementById('counter').textContent = `Coins: ${coins}`;
+        }
+
+        function toggleSound() {
+            isMuted = !isMuted;
+            document.getElementById('soundButton').textContent = isMuted ? '🔇' : '🔊';
+            saveData();
+        }
+
+        function showReferralPopup() {
+            if (!currentUser) {
+                tg.showPopup({
+                    title: 'Error',
+                    message: 'You need to be logged in to use referrals.',
+                    buttons: [{ type: 'ok' }]
+                });
+                return;
+            }
+            const referralLink = `https://t.me/YourBotUsername?start=${currentUser.id}`;
+            tg.showPopup({
+                title: 'Referral Program',
+                message: `Your referral link: ${referralLink}`,
+                buttons: [{ type: 'ok' }]
+            });
+        }
+
+        function showLeaderboard() {
+            tg.showPopup({
+                title: 'Leaderboard',
+                message: 'Leaderboard feature is coming soon!',
+                buttons: [{ type: 'ok' }]
+            });
+        }
+
+        function showShop() {
+            tg.showPopup({
+                title: 'Shop',
+                message: 'Shop feature is coming soon!',
+                buttons: [{ type: 'ok' }]
+            });
+        }
+
+        function saveData() {
+            if (currentUser) {
+                localStorage.setItem(`user_${currentUser.id}`, JSON.stringify({ coins, isMuted }));
+            }
+        }
+
+        function loadData() {
+            if (tg.initDataUnsafe.user) {
+                const savedData = localStorage.getItem(`user_${tg.initDataUnsafe.user.id}`);
+                if (savedData) {
+                    const data = JSON.parse(savedData);
+                    coins = data.coins || 0;
+                    isMuted = data.isMuted || false;
+                }
+            }
+        }
+
+        // Запуск приложения после загрузки страницы
+        window.addEventListener('load', initApp);
+    </script>
+</body>
+</html>
