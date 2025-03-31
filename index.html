@@ -16,7 +16,7 @@
             font-family: Arial, sans-serif;
             background-color: purple;
             color: white;
-            user-select: none; /* Disable text selection */
+            user-select: none;
         }
         #counter {
             font-size: 24px;
@@ -28,9 +28,9 @@
             max-width: 300px;
             height: auto;
             transition: transform 0.2s;
-            outline: none; /* Remove outline on click */
-            border: none; /* Remove border */
-            -webkit-tap-highlight-color: transparent; /* Remove blue rectangle on click for mobile devices */
+            outline: none;
+            border: none;
+            -webkit-tap-highlight-color: transparent;
         }
         #coinButton:active {
             transform: scale(1.1);
@@ -46,8 +46,43 @@
             background: none;
             border: none;
             cursor: pointer;
-            outline: none; /* Remove outline on click */
-            -webkit-tap-highlight-color: transparent; /* Remove blue rectangle on click for mobile devices */
+            outline: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #leaderboard {
+            margin-top: 20px;
+            width: 80%;
+            max-width: 300px;
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 10px;
+            display: none;
+        }
+        #leaderboard h3 {
+            text-align: center;
+            margin-top: 0;
+        }
+        .leaderboard-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+        }
+        .shop-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+        }
+        .shop-item button {
+            background-color: gold;
+            color: purple;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -60,6 +95,11 @@
         <button id="leaderboardButton">🏆</button>
         <button id="shopButton">🛒</button>
     </div>
+    
+    <div id="leaderboard">
+        <h3>Top Players</h3>
+        <div id="leaderboardContent"></div>
+    </div>
 
     <script>
         let tg = window.Telegram.WebApp;
@@ -67,41 +107,122 @@
         let tapValue = 1;
         let isMuted = false;
         let currentUser = null;
+        let referralBonus = 50; // Bonus coins for using a referral
+        let referralReward = 100; // Reward for the referrer
+        const backendUrl = 'https://your-server.com/api'; // Update with your actual backend URL
+        
+        // Upgrades available in the shop
+        const shopItems = [
+            { id: 1, name: "Double Taps", cost: 100, effect: () => { tapValue = 2; } },
+            { id: 2, name: "Triple Taps", cost: 500, effect: () => { tapValue = 3; } },
+            { id: 3, name: "Auto Clicker", cost: 1000, effect: () => { 
+                setInterval(() => { 
+                    coins++; 
+                    updateCounter(); 
+                    saveData(); 
+                }, 5000); 
+            }}
+        ];
 
         function initApp() {
             console.log('Initializing application...');
 
-            // Загрузка данных
+            // Check for referral parameter
+            checkReferral();
+            
+            // Load user data
             loadData();
 
-            // Обновление счетчика
+            // Update counter display
             updateCounter();
 
-            // Добавление обработчиков событий
+            // Add event listeners
             document.getElementById('coinButton').addEventListener('click', handleCoinClick);
             document.getElementById('soundButton').addEventListener('click', toggleSound);
             document.getElementById('referralButton').addEventListener('click', showReferralPopup);
-            document.getElementById('leaderboardButton').addEventListener('click', showLeaderboard);
+            document.getElementById('leaderboardButton').addEventListener('click', toggleLeaderboard);
             document.getElementById('shopButton').addEventListener('click', showShop);
 
-            // Автоматическая авторизация
+            // Auto login with Telegram
             autoLogin();
 
-            // Настройка Telegram Web App
+            // Setup Telegram Web App
             tg.ready();
             tg.expand();
+            
+            // Update sound button display
+            document.getElementById('soundButton').textContent = isMuted ? '🔇' : '🔊';
+        }
+
+        function checkReferral() {
+            // Check if user was referred by someone
+            const urlParams = new URLSearchParams(window.location.search);
+            const referrer = urlParams.get('start');
+            
+            if (referrer && tg.initDataUnsafe.user && referrer != tg.initDataUnsafe.user.id) {
+                // Add bonus coins to new user
+                coins += referralBonus;
+                
+                // Reward the referrer
+                fetch(`${backendUrl}/reward-referrer.php`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        referrerId: referrer,
+                        reward: referralReward
+                    })
+                })
+                .then(response => response.json())
+                .then(data => console.log('Referrer rewarded:', data))
+                .catch(error => console.error('Error rewarding referrer:', error));
+                
+                // Show welcome popup
+                tg.showPopup({
+                    title: 'Welcome!',
+                    message: `You've received ${referralBonus} coins as a welcome bonus!`,
+                    buttons: [{ type: 'ok' }]
+                });
+            }
         }
 
         function autoLogin() {
             if (tg.initDataUnsafe.user) {
                 currentUser = {
                     id: tg.initDataUnsafe.user.id,
-                    username: tg.initDataUnsafe.user.username || `User${tg.initDataUnsafe.user.id}`
+                    username: tg.initDataUnsafe.user.username || `User${tg.initDataUnsafe.user.id}`,
+                    firstName: tg.initDataUnsafe.user.first_name || '',
+                    lastName: tg.initDataUnsafe.user.last_name || ''
                 };
                 console.log('User logged in:', currentUser);
+                
+                // Register user with backend
+                registerUser();
             } else {
                 console.log('User data not available');
             }
+        }
+        
+        function registerUser() {
+            if (!currentUser) return;
+            
+            fetch(`${backendUrl}/register-user.php`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    userId: currentUser.id,
+                    username: currentUser.username,
+                    firstName: currentUser.firstName,
+                    lastName: currentUser.lastName,
+                    coins: coins
+                })
+            })
+            .then(response => response.json())
+            .then(data => console.log('User registered:', data))
+            .catch(error => console.error('Error registering user:', error));
         }
 
         function handleCoinClick() {
@@ -111,12 +232,17 @@
             if (!isMuted) {
                 playSound();
             }
-            tg.sendData(JSON.stringify({ action: 'click', count: coins }));
+            
+            // Send data to Telegram backend
+            tg.sendData(JSON.stringify({ action: 'click', count: coins, userId: currentUser?.id }));
+            
+            // Update score on server
+            updateScoreOnServer();
         }
 
         function playSound() {
             const clickSound = new Audio('https://raw.githubusercontent.com/potcefist420/coingame/main/collectcoin-6075.mp3');
-            clickSound.play();
+            clickSound.play().catch(e => console.log('Audio play failed:', e));
         }
 
         function updateCounter() {
@@ -138,33 +264,143 @@
                 });
                 return;
             }
-            const referralLink = `https://t.me/YourBotUsername?start=${currentUser.id}`;
+            
+            // Use your actual bot username here
+            const botUsername = 'YourBotUsername';
+            const referralLink = `https://t.me/${botUsername}?start=${currentUser.id}`;
+            
             tg.showPopup({
                 title: 'Referral Program',
-                message: `Your referral link: ${referralLink}`,
-                buttons: [{ type: 'ok' }]
+                message: `Share this link with friends and earn ${referralReward} coins for each new player! \n\nYour referral link: ${referralLink}`,
+                buttons: [
+                    { type: 'ok', text: 'OK' },
+                    { type: 'close' }
+                ]
             });
         }
 
-        function showLeaderboard() {
-            tg.showPopup({
-                title: 'Leaderboard',
-                message: 'Leaderboard feature is coming soon!',
-                buttons: [{ type: 'ok' }]
-            });
+        function toggleLeaderboard() {
+            const leaderboardDiv = document.getElementById('leaderboard');
+            if (leaderboardDiv.style.display === 'none' || !leaderboardDiv.style.display) {
+                fetchLeaderboard();
+                leaderboardDiv.style.display = 'block';
+            } else {
+                leaderboardDiv.style.display = 'none';
+            }
+        }
+        
+        function fetchLeaderboard() {
+            fetch(`${backendUrl}/leaderboard.php`)
+                .then(response => response.json())
+                .then(data => {
+                    const leaderboardContent = document.getElementById('leaderboardContent');
+                    leaderboardContent.innerHTML = '';
+                    
+                    if (data && data.length > 0) {
+                        data.forEach((player, index) => {
+                            const playerElement = document.createElement('div');
+                            playerElement.className = 'leaderboard-item';
+                            playerElement.innerHTML = `
+                                <span>${index + 1}. ${player.username}</span>
+                                <span>${player.coins} coins</span>
+                            `;
+                            leaderboardContent.appendChild(playerElement);
+                        });
+                    } else {
+                        leaderboardContent.innerHTML = '<p>No players yet!</p>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching leaderboard:', error);
+                    document.getElementById('leaderboardContent').innerHTML = '<p>Could not load leaderboard</p>';
+                });
         }
 
         function showShop() {
+            let shopHTML = '<div style="max-height: 300px; overflow-y: auto;">';
+            shopItems.forEach(item => {
+                shopHTML += `
+                    <div class="shop-item">
+                        <div>
+                            <strong>${item.name}</strong>
+                            <div>${item.cost} coins</div>
+                        </div>
+                        <button onclick="buyItem(${item.id})">Buy</button>
+                    </div>
+                `;
+            });
+            shopHTML += '</div>';
+            
             tg.showPopup({
                 title: 'Shop',
-                message: 'Shop feature is coming soon!',
-                buttons: [{ type: 'ok' }]
+                message: 'Buy upgrades to earn coins faster!',
+                buttons: [{ type: 'close' }]
             });
+            
+            // This is a workaround since Telegram mini apps have limited popup capabilities
+            // In a real implementation, you might want to create a modal or new screen for the shop
+            setTimeout(() => {
+                tg.showPopup({
+                    title: 'Shop',
+                    message: shopHTML,
+                    buttons: [{ type: 'close' }]
+                });
+            }, 500);
+        }
+        
+        function buyItem(itemId) {
+            const item = shopItems.find(i => i.id === itemId);
+            if (!item) return;
+            
+            if (coins >= item.cost) {
+                coins -= item.cost;
+                item.effect();
+                updateCounter();
+                saveData();
+                updateScoreOnServer();
+                
+                tg.showPopup({
+                    title: 'Purchase Successful',
+                    message: `You bought ${item.name}!`,
+                    buttons: [{ type: 'ok' }]
+                });
+            } else {
+                tg.showPopup({
+                    title: 'Not Enough Coins',
+                    message: `You need ${item.cost - coins} more coins to buy this item.`,
+                    buttons: [{ type: 'ok' }]
+                });
+            }
+        }
+
+        function updateScoreOnServer() {
+            if (!currentUser) return;
+            
+            fetch(`${backendUrl}/update-score.php`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    userId: currentUser.id,
+                    coins: coins
+                })
+            })
+            .then(response => response.json())
+            .then(data => console.log('Score updated:', data))
+            .catch(error => console.error('Error updating score:', error));
         }
 
         function saveData() {
             if (currentUser) {
-                localStorage.setItem(`user_${currentUser.id}`, JSON.stringify({ coins, isMuted }));
+                localStorage.setItem(`user_${currentUser.id}`, JSON.stringify({ 
+                    coins, 
+                    isMuted,
+                    tapValue
+                }));
+                
+                // Also save to server
+                updateScoreOnServer();
             }
         }
 
@@ -175,11 +411,33 @@
                     const data = JSON.parse(savedData);
                     coins = data.coins || 0;
                     isMuted = data.isMuted || false;
+                    tapValue = data.tapValue || 1;
                 }
+                
+                // Also fetch from server to ensure latest data
+                fetchUserData();
             }
         }
+        
+        function fetchUserData() {
+            if (!tg.initDataUnsafe.user) return;
+            
+            fetch(`${backendUrl}/get-user.php?userId=${tg.initDataUnsafe.user.id}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.coins) {
+                        // Use server data if it's higher than local storage
+                        if (data.coins > coins) {
+                            coins = data.coins;
+                            updateCounter();
+                            saveData();
+                        }
+                    }
+                })
+                .catch(error => console.error('Error fetching user data:', error));
+        }
 
-        // Запуск приложения после загрузки страницы
+        // Start the application after page loads
         window.addEventListener('load', initApp);
     </script>
 </body>
